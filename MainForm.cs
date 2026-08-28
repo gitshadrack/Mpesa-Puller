@@ -41,18 +41,16 @@ sealed class MainForm : Form
         databaseLabel = new Label { Text = "Database: not tested", Dock = DockStyle.Top, Height = 26, Padding = new Padding(20, 2, 0, 0) };
         openButton = new Button { Text = "Open / Start", Width = 120, Height = 36, Enabled = true };
         closeButton = new Button { Text = "Close / Stop", Width = 120, Height = 36, Enabled = false };
-        var dummyButton = new Button { Text = "Insert Dummy Messages", Width = 160, Height = 36 };
         var previewButton = new Button { Text = "Preview Parser", Width = 110, Height = 36 };
         testButton = new Button { Text = "Test Modem", Width = 100, Height = 36 };
         var minimizeButton = new Button { Text = "Run in Background", Width = 150, Height = 36 };
         openButton.Click += async (_, _) => await StartPollingAsync();
         closeButton.Click += (_, _) => StopPolling();
-        dummyButton.Click += async (_, _) => await InsertDummyMessagesAsync();
         previewButton.Click += (_, _) => PreviewParser();
         testButton.Click += async (_, _) => await TestModemAsync();
         minimizeButton.Click += (_, _) => MinimizeToTray();
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18, 8, 18, 8), AutoSize = false };
-        buttons.Controls.AddRange(new Control[] { openButton, closeButton, dummyButton, previewButton, testButton, minimizeButton });
+        buttons.Controls.AddRange(new Control[] { openButton, closeButton, previewButton, testButton, minimizeButton });
         var operationsPage = new TabPage("Operations");
         operationsPage.Controls.Add(buttons);
         operationsPage.Controls.Add(databaseLabel);
@@ -125,7 +123,9 @@ sealed class MainForm : Form
         var userBox = new TextBox { Text = connection.UserID, Width = 300 };
         var passwordBox = new TextBox { Text = connection.Password, UseSystemPasswordChar = true, Width = 300 };
         var saveButton = new Button { Text = "Save Database Settings", Width = 180, Height = 36 };
+        var dummyButton = new Button { Text = "Insert Dummy Messages", Width = 180, Height = 36 };
         var note = new Label { Text = "Changes take effect after restarting the application.", AutoSize = true, ForeColor = Color.DimGray };
+        dummyButton.Click += async (_, _) => await InsertDummyMessagesAsync();
         saveButton.Click += (_, _) =>
         {
             try
@@ -153,12 +153,12 @@ sealed class MainForm : Form
                 MessageBox.Show(this, $"Could not save settings: {exception.Message}", "Settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         };
-        var form = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(20), ColumnCount = 2, RowCount = 6 };
+        var form = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(20), ColumnCount = 2, RowCount = 7 };
         form.Controls.Add(new Label { Text = "SQL Server / Instance", AutoSize = true }, 0, 0); form.Controls.Add(serverBox, 1, 0);
         form.Controls.Add(new Label { Text = "Database", AutoSize = true }, 0, 1); form.Controls.Add(databaseBox, 1, 1);
         form.Controls.Add(new Label { Text = "User", AutoSize = true }, 0, 2); form.Controls.Add(userBox, 1, 2);
         form.Controls.Add(new Label { Text = "Password", AutoSize = true }, 0, 3); form.Controls.Add(passwordBox, 1, 3);
-        form.Controls.Add(saveButton, 1, 4); form.Controls.Add(note, 1, 5);
+        form.Controls.Add(saveButton, 1, 4); form.Controls.Add(dummyButton, 1, 5); form.Controls.Add(note, 1, 6);
         settingsPanel.Controls.Add(form);
     }
 

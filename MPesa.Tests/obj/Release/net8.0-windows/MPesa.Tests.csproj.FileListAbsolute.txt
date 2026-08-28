@@ -170,3 +170,4 @@ E:\mPESA\MPesa.Tests\obj\Release\net8.0-windows\refint\MPesa.Tests.dll
 E:\mPESA\MPesa.Tests\obj\Release\net8.0-windows\MPesa.Tests.pdb
 E:\mPESA\MPesa.Tests\obj\Release\net8.0-windows\MPesa.Tests.genruntimeconfig.cache
 E:\mPESA\MPesa.Tests\obj\Release\net8.0-windows\ref\MPesa.Tests.dll
+E:\mPESA\MPesa.Tests\obj\Release\net8.0-windows\MPesa.Tests.sourcelink.json
