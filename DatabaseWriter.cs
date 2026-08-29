@@ -62,6 +62,38 @@ sealed class DatabaseWriter
         return inserted;
     }
 
+    public async Task TestConnectionAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = new SqlCommand("SELECT 1;", connection);
+        await command.ExecuteScalarAsync(cancellationToken);
+    }
+
+    public async Task<DashboardSummary> GetDashboardSummaryAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT
+                (SELECT COUNT(1) FROM dbo.txMessages WHERE [Date] = @Today) AS PaymentCount,
+                (SELECT COALESCE(SUM(Amount), 0) FROM dbo.txMessages WHERE [Date] = @Today) AS TotalAmount,
+                (SELECT TOP (1) TransactionNo FROM dbo.txMessages ORDER BY TransNo DESC) AS TransactionNo,
+                (SELECT TOP (1) SenderName FROM dbo.txMessages ORDER BY TransNo DESC) AS SenderName,
+                (SELECT TOP (1) Amount FROM dbo.txMessages ORDER BY TransNo DESC) AS Amount,
+                (SELECT TOP (1) [Time] FROM dbo.txMessages ORDER BY TransNo DESC) AS [Time];
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@Today", DateTime.Today);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return new DashboardSummary(0, 0, null, null, null, null);
+        return new DashboardSummary(
+            reader.IsDBNull(0) ? 0 : reader.GetInt32(0),
+            reader.IsDBNull(1) ? 0 : Convert.ToDouble(reader.GetValue(1), CultureInfo.InvariantCulture),
+            ReadText(reader, 2),
+            ReadText(reader, 3),
+            reader.IsDBNull(4) ? null : Convert.ToDouble(reader.GetValue(4), CultureInfo.InvariantCulture),
+            ReadText(reader, 5));
+    }
+
     public async Task<bool> ImportAsync(SmsMessage sms, GsmSettings settings, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -116,9 +148,20 @@ sealed class DatabaseWriter
         Exception? lastException = null;
         for (var attempt = 1; attempt <= 3; attempt++)
         {
-            try { var connection = new SqlConnection(connectionString); await connection.OpenAsync(cancellationToken); return connection; }
-            catch (Exception exception) when (exception is SqlException or TimeoutException) { lastException = exception; await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken); }
+            try
+            {
+                var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync(cancellationToken);
+                return connection;
+            }
+            catch (Exception exception) when (exception is SqlException or TimeoutException)
+            {
+                lastException = exception;
+                AppLog.Error("SQL connection attempt failed.", exception, $"Attempt: {attempt} of 3");
+                await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+            }
         }
+        AppLog.Error("SQL Server connection failed after all retry attempts.", lastException!, "Attempts: 3");
         throw new InvalidOperationException("Could not connect to SQL Server after 3 attempts.", lastException);
     }
 

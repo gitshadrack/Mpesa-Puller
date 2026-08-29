@@ -1,8 +1,15 @@
+param(
+    [string]$ServerInstance = 'Server\MSSQLServer',
+    [string]$DatabaseName = 'Restaurant',
+    [string]$SqlUser = 'sa',
+    [string]$SqlPassword = '123456'
+)
+
 $ErrorActionPreference = 'Stop'
-$server = 'Server\MSSQLServer'
-$database = 'Restaurant'
-$user = 'sa'
-$password = '123456'
+$server = $ServerInstance
+$database = $DatabaseName
+$user = $SqlUser
+$password = $SqlPassword
 $schemaPath = Join-Path $PSScriptRoot 'MPESAscript.sql'
 
 try {

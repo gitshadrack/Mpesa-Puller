@@ -29,9 +29,12 @@ foreach ($shortcutPath in @(
 
      Write-Host "Installed M-Pesa Message Puller to $installDir"
      Write-Host "Edit $installDir\appsettings.json before starting the application."
+     Write-Host "Diagnostic logs are written to $env:LOCALAPPDATA\MPesa\logs."
      $runDatabaseSetup = Read-Host "Create/update the Restaurant database now? (Y/N)"
      if ($runDatabaseSetup -match '^(Y|y)$') {
-         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir 'Setup-Database.ps1')
+         $serverInstance = Read-Host "SQL Server / Instance [Server\MSSQLServer]"
+         if ([string]::IsNullOrWhiteSpace($serverInstance)) { $serverInstance = 'Server\MSSQLServer' }
+         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir 'Setup-Database.ps1') -ServerInstance $serverInstance
          if ($LASTEXITCODE -ne 0) { Write-Host "Database setup did not complete. Run Setup-Database.ps1 later." -ForegroundColor Yellow }
      }
      $runAtStartup = Read-Host "Start M-Pesa automatically with Windows? (Y/N)"

@@ -4,7 +4,17 @@ obj/
 
 # Published binaries and installer output
 publish/
-installer/
+
+
+publish-600x500/
+publish-fixed-window/
+publish-mssqlserver/
+publish-minimum-default/
+publish-mssqlserver/
+publish-responsive-ui/
+publish-sql-discovery/
+publish-update/
+
 
 # Per-user configuration may contain database credentials
 .local/

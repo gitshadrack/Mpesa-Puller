@@ -35,8 +35,9 @@ public sealed class GsmModem : IDisposable
                 modem.Probe();
                 return candidate;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                AppLog.Error("GSM modem probe failed.", exception, $"Port: {candidate}");
             }
         }
         return null;
@@ -44,31 +45,47 @@ public sealed class GsmModem : IDisposable
 
     public void Probe()
     {
-        port.Open();
-        var response = Send("AT");
-        if (!response.Contains("OK", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            throw new IOException($"No GSM modem response on {options.PortName}.");
+            port.Open();
+            var response = Send("AT");
+            if (!response.Contains("OK", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException($"No GSM modem response on {options.PortName}.");
+            }
         }
-        UnlockSim();
+        catch (Exception exception)
+        {
+            AppLog.Error("GSM modem probe failed.", exception, $"Port: {options.PortName}");
+            throw;
+        }
     }
 
     public void Open()
     {
-        port.Open();
-        var response = Send("AT");
-        if (!response.Contains("OK", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            throw new IOException($"No GSM modem response on {options.PortName}.");
+            port.Open();
+            var response = Send("AT");
+            if (!response.Contains("OK", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException($"No GSM modem response on {options.PortName}.");
+            }
+            UnlockSim();
+            Send("AT+CMGF=1");
+            Send("AT+CPMS=\"SM\"");
         }
-        UnlockSim();
-        Send("AT+CMGF=1");
-        Send("AT+CPMS=\"SM\"");
+        catch (Exception exception)
+        {
+            AppLog.Error("GSM modem startup failed.", exception, $"Port: {options.PortName}");
+            throw;
+        }
     }
 
     private void UnlockSim()
     {
-        var pinStatus = Send("AT+CPIN?");
+        var pinStatus = Send("AT+CPIN?", allowErrorResponse: true);
+        ThrowForSimStatusError(pinStatus, pinWasSubmitted: false);
         if (IsSimReady(pinStatus))
         {
             return;
@@ -91,11 +108,13 @@ public sealed class GsmModem : IDisposable
             throw new IOException($"SIM PIN format is invalid on {options.PortName}. It must contain 4 to 8 digits.");
         }
 
-        Send($"AT+CPIN=\"{pin}\"");
+        var unlockResponse = Send($"AT+CPIN=\"{pin}\"", allowErrorResponse: true);
+        ThrowForSimStatusError(unlockResponse, pinWasSubmitted: true);
         for (var attempt = 0; attempt < 6; attempt++)
         {
             Thread.Sleep(1000);
-            var readyStatus = Send("AT+CPIN?");
+            var readyStatus = Send("AT+CPIN?", allowErrorResponse: true);
+            ThrowForSimStatusError(readyStatus, pinWasSubmitted: true);
             if (IsSimReady(readyStatus))
             {
                 return;
@@ -110,6 +129,23 @@ public sealed class GsmModem : IDisposable
 
     private static bool IsSimReady(string response) => response.Contains("READY", StringComparison.OrdinalIgnoreCase);
 
+    private void ThrowForSimStatusError(string response, bool pinWasSubmitted)
+    {
+        if (!response.Contains("ERROR", StringComparison.OrdinalIgnoreCase)) return;
+
+        // Preserve the modem's precise response in the log, but never show it to the operator.
+        AppLog.Error("GSM modem reported a SIM status error.", new IOException($"AT+CPIN response: {response.Trim()}"), $"Port: {options.PortName}");
+        if (response.Contains("PUK", StringComparison.OrdinalIgnoreCase) || Regex.IsMatch(response, @"\+CME ERROR:\s*12\b", RegexOptions.IgnoreCase))
+        {
+            throw new IOException("SIM card is blocked. PUK required.");
+        }
+        if (pinWasSubmitted || response.Contains("SIM PIN", StringComparison.OrdinalIgnoreCase) || Regex.IsMatch(response, @"\+CME ERROR:\s*(11|16)\b", RegexOptions.IgnoreCase))
+        {
+            throw new IOException("SIM PIN error. Check the configured PIN.");
+        }
+        throw new IOException("SIM card not detected. Insert or re-seat the SIM card.");
+    }
+
     private static bool IsSimPresent(string cpinResponse, string ccidResponse) =>
         IsSimReady(cpinResponse) ||
         cpinResponse.Contains("SIM PIN", StringComparison.OrdinalIgnoreCase) ||
@@ -117,7 +153,7 @@ public sealed class GsmModem : IDisposable
 
     public ModemDiagnostics ReadDiagnostics()
     {
-        var simStatus = Send("AT+CPIN?");
+        var simStatus = Send("AT+CPIN?", allowErrorResponse: true);
         var simResponse = string.Empty;
         try
         {
@@ -138,10 +174,10 @@ public sealed class GsmModem : IDisposable
 
     public IReadOnlyList<SmsMessage> ReadUnreadMessages()
     {
-        return ParseUnreadMessages(Send("AT+CMGL=\"REC UNREAD\""));
+        return ParseUnreadMessages(Send("AT+CMGL=\"REC UNREAD\""), options.MessageProfile);
     }
 
-    public static IReadOnlyList<SmsMessage> ParseUnreadMessages(string response)
+    public static IReadOnlyList<SmsMessage> ParseUnreadMessages(string response, string messageProfile = "Auto Detect")
     {
         var messages = new List<SmsMessage>();
         var lines = response.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
@@ -166,7 +202,8 @@ public sealed class GsmModem : IDisposable
                 senderMatch.Groups[1].Value,
                 dateMatch.Groups[1].Value,
                 dateMatch.Groups[2].Value,
-                body));
+                body,
+                messageProfile));
         }
         return messages;
     }
@@ -175,7 +212,7 @@ public sealed class GsmModem : IDisposable
 
     public void Dispose() => port.Dispose();
 
-    private string Send(string command)
+    private string Send(string command, bool allowErrorResponse = false)
     {
         port.DiscardInBuffer();
         port.Write(command + "\r");
@@ -192,10 +229,13 @@ public sealed class GsmModem : IDisposable
         }
 
         var response = result.ToString();
-        if (response.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
+        if (!allowErrorResponse && response.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
         {
-            throw new IOException($"Modem rejected command {command}: {response.Trim()}");
+            // Do not write command values here: AT+CPIN contains the SIM PIN.
+            throw new IOException($"Modem rejected command {CommandName(command)}: {response.Trim()}");
         }
         return response;
     }
+
+    private static string CommandName(string command) => command.StartsWith("AT+CPIN", StringComparison.OrdinalIgnoreCase) ? "AT+CPIN" : command;
 }
