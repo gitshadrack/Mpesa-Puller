@@ -83,5 +83,6 @@ public static class MessageProfiles
 
 public sealed record GsmSettings(string? PortName, string? Pin, bool CheckMessages, string? MasterTill, bool PrintReceipt, string? PrinterName, string? PrinterDriver, string? PrinterPort, int Copies, string? Entity);
 public sealed record ModemDiagnostics(string SimCard, string Signal, string Network);
+public sealed record ModemConnection(string PortName, int BaudRate);
 public sealed record SmsMessage(int Index, string ModemSender, string Body, string? TransactionNo, string MobileNo, string SenderName, DateTime Date, string Time, double Amount, double Charges, string? BillNo);
 public sealed record DashboardSummary(int PaymentCount, double TotalAmount, string? LastTransactionNo, string? LastSenderName, double? LastAmount, string? LastTime);

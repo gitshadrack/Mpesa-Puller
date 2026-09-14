@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 sealed class DatabaseWriter
 {
-    private readonly string connectionString;
+    private string connectionString;
     private readonly ILogger<DatabaseWriter> logger;
 
     public DatabaseWriter(IConfiguration configuration, ILogger<DatabaseWriter> logger)
@@ -69,6 +69,16 @@ sealed class DatabaseWriter
         await command.ExecuteScalarAsync(cancellationToken);
     }
 
+    public static async Task TestConnectionAsync(string candidateConnectionString, CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(candidateConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand("SELECT 1;", connection);
+        await command.ExecuteScalarAsync(cancellationToken);
+    }
+
+    public void UpdateConnectionString(string value) => Volatile.Write(ref connectionString, value);
+
     public async Task<DashboardSummary> GetDashboardSummaryAsync(CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -92,6 +102,33 @@ sealed class DatabaseWriter
             ReadText(reader, 3),
             reader.IsDBNull(4) ? null : Convert.ToDouble(reader.GetValue(4), CultureInfo.InvariantCulture),
             ReadText(reader, 5));
+    }
+
+    public async Task<IReadOnlyList<SmsMessage>> GetMessagesByDateAsync(DateTime date, int maximumRows, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        const string sql = "SELECT TOP (@MaximumRows) TransactionNo, MobileNo, [Date], [Time], Amount, Charges, SenderName, RawMessage, BillNo, NetworkName FROM dbo.txMessages WHERE [Date] = @Date ORDER BY TransNo DESC;";
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@MaximumRows", Math.Clamp(maximumRows, 1, 2000));
+        command.Parameters.AddWithValue("@Date", date.Date);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var messages = new List<SmsMessage>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            messages.Add(new SmsMessage(
+                0,
+                ReadText(reader, 9) ?? "MPESA",
+                ReadText(reader, 7) ?? string.Empty,
+                ReadText(reader, 0),
+                ReadText(reader, 1) ?? string.Empty,
+                ReadText(reader, 6) ?? "Unknown",
+                reader.IsDBNull(2) ? DateTime.Today : reader.GetDateTime(2),
+                ReadText(reader, 3) ?? "00:00:00",
+                reader.IsDBNull(4) ? 0 : Convert.ToDouble(reader.GetValue(4), CultureInfo.InvariantCulture),
+                reader.IsDBNull(5) ? 0 : Convert.ToDouble(reader.GetValue(5), CultureInfo.InvariantCulture),
+                ReadText(reader, 8)));
+        }
+        return messages;
     }
 
     public async Task<bool> ImportAsync(SmsMessage sms, GsmSettings settings, CancellationToken cancellationToken)
@@ -150,7 +187,7 @@ sealed class DatabaseWriter
         {
             try
             {
-                var connection = new SqlConnection(connectionString);
+                var connection = new SqlConnection(Volatile.Read(ref connectionString));
                 await connection.OpenAsync(cancellationToken);
                 return connection;
             }

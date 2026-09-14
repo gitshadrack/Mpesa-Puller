@@ -14,6 +14,7 @@ publish-mssqlserver/
 publish-responsive-ui/
 publish-sql-discovery/
 publish-update/
+installer/
 
 
 # Per-user configuration may contain database credentials

@@ -17,13 +17,14 @@ static class NetworkNames
 
 public static class SmsParser
 {
-    private static readonly Regex TransactionPattern = new(@"\b([A-Z0-9]{8,})\s+Confirmed\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex TransactionPattern = new(@"\b([A-Z0-9]{8,})\s+(?:Confirmed|completed)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex LeadingTransactionPattern = new(@"^\s*([A-Z0-9]{8,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex AmountPattern = new(@"\b(?:Ksh|KES)\s*([\d,]+(?:\.\d{1,2})?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex ChargesPattern = new(@"(?:charge|fee|cost)[^\d]{0,20}(?:Ksh|KES)?\s*([\d,]+(?:\.\d{1,2})?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex MobilePattern = new(@"(?<!\d)(?:254\d{2,9}\*+\d{3}|0\d{3}\*+\d{3}|254\d{9}|0\d{9})(?!\d)", RegexOptions.Compiled);
     private static readonly Regex SenderPattern = new(@"\b(?:from|kutoka\s+kwa)\s+(.+?)(?:\s*\(?\s*(?:254\d{2,9}\*+\d{3}|0\d{3}\*+\d{3}|254\d{9}|0\d{9})\s*\)?|\s+(?:on|at|kwny)\s+|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex BillPattern = new(@"\b(?:bill|account(?:/invoice)?|invoice|ref(?:erence)?)[\s:#/-]+([A-Z0-9][A-Z0-9/-]{2,})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex KcbPaybillAccountPattern = new(@"\bfor\s+account\s+(.+?)\s+on\s+\d{1,2}/\d{1,2}/\d{2,4}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex BalanceEndPattern = new(@"\b(?:New\s+)?(?:(?:M[- ]?PESA|Till|wallet|account|business|utility)\s+)?balance\s+is\s+(?:(?:Ksh|KES)\s*)?[\d,]+(?:\.\d{1,2})?|\bSalio\s+jipya\s+la\s+Pochi\s+ni\s+(?:(?:Ksh|KES)\s*)?[\d,]+(?:\.\d{1,2})?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex IncomingPaymentPattern = new(@"\b(?:you\s+have\s+)?received\s+(?:Ksh|KES)\s*[\d,]+(?:\.\d{1,2})?\s+from\b|\b(?:Ksh|KES)\s*[\d,]+(?:\.\d{1,2})?\s+received\s+from\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PochiPaymentPattern = new(@"\bumepokea\s+(?:Ksh|KES)\s*[\d,]+(?:\.\d{1,2})?\s+kutoka\s+kwa\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -58,7 +59,8 @@ public static class SmsParser
             MessageProfiles.SafaricomPaybill => ContainsAny(body, "for account") && ContainsAny(body, "new utility balance", "new mmf balance"),
             MessageProfiles.PochiLaBiashara => ContainsAny(body, "kwny pochi la biashara"),
             MessageProfiles.Equity => ContainsAny(body, "equity"),
-            MessageProfiles.KcbTillNumber or MessageProfiles.KcbPaybill => ContainsAny(body, "kcb"),
+            MessageProfiles.KcbTillNumber => ContainsAny(body, "kcb") && !ContainsAny(body, "for account"),
+            MessageProfiles.KcbPaybill => ContainsAny(body, "kcb") && ContainsAny(body, "for account"),
             MessageProfiles.Dtb => ContainsAny(body, "dtb", "diamond trust"),
             MessageProfiles.NationalBank => ContainsAny(body, "national bank", "nationalbank"),
             _ => false
@@ -93,7 +95,10 @@ public static class SmsParser
 
         var chargesText = ChargesPattern.Match(transactionBody).Groups[1].Value.Replace(",", string.Empty);
         double.TryParse(chargesText, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var charges);
-        var billNo = BillPattern.Match(transactionBody).Groups[1].Value;
+        var profile = MessageProfiles.Normalize(messageProfile);
+        var billNo = profile == MessageProfiles.KcbPaybill
+            ? KcbPaybillAccountPattern.Match(transactionBody).Groups[1].Value.Trim()
+            : BillPattern.Match(transactionBody).Groups[1].Value;
         return new SmsMessage(index, sender, body, transaction.Length == 0 ? null : transaction, mobile, senderName, dateTime.Date, dateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture), amount, charges, billNo.Length == 0 ? null : billNo);
     }
 

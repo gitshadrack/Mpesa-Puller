@@ -1,4 +1,5 @@
 using Xunit;
+using System;
 using System.Collections.Generic;
 
 public sealed class SmsParserTests
@@ -149,5 +150,53 @@ public sealed class SmsParserTests
         Assert.Equal("UIO789PAS1", sms.TransactionNo);
         Assert.Equal("PETER KAMAU", sms.SenderName);
         Assert.True(SmsParser.IsIncomingPayment(sms, MessageProfiles.PochiLaBiashara));
+    }
+
+    [Fact]
+    public void ParsesKcbPaybillCompletedTemplate()
+    {
+        const string body = "UI1I75S7WJ completed. You have received KES 110 from DANIEL WAMBUA 254721683483 for account SERENGETIHOTEL 7723635 on 01/09/2026 at 03:31 PM. KCB Go Ahead.";
+
+        var sms = SmsParser.Parse(28, "KCB", "26/09/01", "15:31:00", body, MessageProfiles.KcbPaybill);
+
+        Assert.Equal("UI1I75S7WJ", sms.TransactionNo);
+        Assert.Equal(110, sms.Amount);
+        Assert.Equal("254721683483", sms.MobileNo);
+        Assert.Equal("DANIEL WAMBUA", sms.SenderName);
+        Assert.Equal("SERENGETIHOTEL 7723635", sms.BillNo);
+        Assert.True(SmsParser.IsIncomingPayment(sms, MessageProfiles.KcbPaybill));
+        Assert.False(SmsParser.IsIncomingPayment(sms, MessageProfiles.KcbTillNumber));
+    }
+
+    [Theory]
+    [InlineData("Generic 58mm Thermal", 315, 58)]
+    [InlineData("Generic 80mm Thermal", 228, 80)]
+    [InlineData(null, 228, 58)]
+    [InlineData(null, 315, 80)]
+    public void SelectsThermalReceiptWidth(string? driver, int detectedWidth, int expectedWidth)
+    {
+        Assert.Equal(expectedWidth, ReceiptPrinter.ResolvePaperWidthMm(driver, detectedWidth));
+    }
+
+    [Fact]
+    public void BuildsApprovedPaymentReceiptWithoutMerchantCopy()
+    {
+        const string body = "UI1I75S7WJ completed. You have received KES 110 from DANIEL WAMBUA 254721683483 for account SERENGETIHOTEL 7723635.";
+        var sms = SmsParser.Parse(29, "KCB", "26/09/01", "15:31:00", body, MessageProfiles.KcbPaybill);
+        var settings = new GsmSettings("COM3", null, true, "522522", true, "Thermal", "58mm", "USB", 1, "SERENGETI HOTEL");
+        var lines = ReceiptPrinter.BuildReceiptLines(sms, settings, 58);
+        var receipt = string.Join(" ", lines);
+
+        Assert.Equal("SERENGETI HOTEL", lines[0]);
+        Assert.Equal("PAYMENT APPROVED", lines[2]);
+        Assert.Contains("KES 110.00", lines);
+        Assert.Contains("UI1I75S7WJ", receipt);
+        Assert.Contains("DANIEL WAMBUA", receipt);
+        Assert.Contains("DATE: 01-09-2026 15:31", receipt);
+        Assert.Contains("CASHIER: Cashier", receipt);
+        Assert.DoesNotContain("MERCHANT", receipt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("COPY", receipt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("You have received", receipt);
+        Assert.All(lines, line => Assert.True(line.Length <= 30));
     }
 }

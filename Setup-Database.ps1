@@ -2,7 +2,9 @@ param(
     [string]$ServerInstance = 'Server\MSSQLServer',
     [string]$DatabaseName = 'Restaurant',
     [string]$SqlUser = 'sa',
-    [string]$SqlPassword = '123456'
+    [string]$SqlPassword = '123456',
+    [string]$AppSettingsPath,
+    [switch]$ConfigureOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,6 +16,27 @@ $schemaPath = Join-Path $PSScriptRoot 'MPESAscript.sql'
 
 try {
     Add-Type -AssemblyName System.Data
+    if (-not [string]::IsNullOrWhiteSpace($AppSettingsPath)) {
+        $builder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+        $builder['Data Source'] = $server
+        $builder['Initial Catalog'] = $database
+        $builder['User ID'] = $user
+        $builder['Password'] = $password
+        $builder['Integrated Security'] = $false
+        $builder['TrustServerCertificate'] = $true
+        $builder['Connect Timeout'] = 10
+
+        $configuration = Get-Content -Raw -LiteralPath $AppSettingsPath | ConvertFrom-Json
+        if ($null -eq $configuration.ConnectionStrings) {
+            $configuration | Add-Member -MemberType NoteProperty -Name ConnectionStrings -Value ([pscustomobject]@{})
+        }
+        $configuration.ConnectionStrings.Restaurant = $builder.ConnectionString
+        $configuration | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $AppSettingsPath -Encoding UTF8
+        Write-Host "Application database connection saved."
+    }
+
+    if ($ConfigureOnly) { exit 0 }
+
     $masterConnection = New-Object System.Data.SqlClient.SqlConnection("Server=$server;Database=master;User ID=$user;Password=$password;TrustServerCertificate=True;")
     $masterConnection.Open()
     $createCommand = $masterConnection.CreateCommand()

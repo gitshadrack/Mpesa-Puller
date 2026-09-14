@@ -16,40 +16,50 @@ public sealed class GsmModem : IDisposable
             NewLine = "\r\n",
             ReadTimeout = options.CommandTimeoutSeconds * 1000,
             WriteTimeout = options.CommandTimeoutSeconds * 1000,
-            Encoding = Encoding.ASCII
+            Encoding = Encoding.ASCII,
+            DtrEnable = true,
+            RtsEnable = true
         };
     }
 
-    public static string? FindPort(PullerOptions options)
+    public static ModemConnection? FindConnection(PullerOptions options)
     {
         var availablePorts = SerialPort.GetPortNames();
         var candidates = string.IsNullOrWhiteSpace(options.PortName)
             ? availablePorts
             : new[] { options.PortName }.Concat(availablePorts.Where(port => !string.Equals(port, options.PortName, StringComparison.OrdinalIgnoreCase)));
+        var baudRates = new[] { options.BaudRate, 115200, 57600, 38400, 19200, 9600 }.Distinct().ToArray();
 
         foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            try
+            foreach (var baudRate in baudRates)
             {
-                using var modem = new GsmModem(options with { PortName = candidate });
-                modem.Probe();
-                return candidate;
-            }
-            catch (Exception exception)
-            {
-                AppLog.Error("GSM modem probe failed.", exception, $"Port: {candidate}");
+                try
+                {
+                    using var modem = new GsmModem(options with { PortName = candidate, BaudRate = baudRate, CommandTimeoutSeconds = Math.Min(options.CommandTimeoutSeconds, 2) });
+                    modem.Probe();
+                    return new ModemConnection(candidate, baudRate);
+                }
+                catch (Exception exception)
+                {
+                    AppLog.Error("GSM modem probe failed.", exception, $"Port: {candidate}; Baud: {baudRate}");
+                }
             }
         }
         return null;
     }
+
+    public static string? FindPort(PullerOptions options) => FindConnection(options)?.PortName;
 
     public void Probe()
     {
         try
         {
             port.Open();
+            Thread.Sleep(200);
             var response = Send("AT");
-            if (!response.Contains("OK", StringComparison.OrdinalIgnoreCase))
+            if (!HasOk(response)) response = Send("AT");
+            if (!HasOk(response))
             {
                 throw new IOException($"No GSM modem response on {options.PortName}.");
             }
@@ -66,8 +76,10 @@ public sealed class GsmModem : IDisposable
         try
         {
             port.Open();
+            Thread.Sleep(200);
             var response = Send("AT");
-            if (!response.Contains("OK", StringComparison.OrdinalIgnoreCase))
+            if (!HasOk(response)) response = Send("AT");
+            if (!HasOk(response))
             {
                 throw new IOException($"No GSM modem response on {options.PortName}.");
             }
@@ -128,6 +140,7 @@ public sealed class GsmModem : IDisposable
     }
 
     private static bool IsSimReady(string response) => response.Contains("READY", StringComparison.OrdinalIgnoreCase);
+    private static bool HasOk(string response) => Regex.IsMatch(response, @"(?:^|[\r\n])\s*OK\s*(?:[\r\n]|$)", RegexOptions.IgnoreCase);
 
     private void ThrowForSimStatusError(string response, bool pinWasSubmitted)
     {
