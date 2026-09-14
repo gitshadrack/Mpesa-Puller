@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MPesa.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+29f211ff17b8b7f1ca5c2b2e5f57d6248cfdcddf")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bcdb70f83feccb5d01b8d441f02009a564305f8d")]
 [assembly: System.Reflection.AssemblyProductAttribute("MPesa.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MPesa.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

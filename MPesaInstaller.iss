@@ -1,5 +1,5 @@
 #define MyAppName "M-Pesa Message Puller"
-#define MyAppVersion "1.1.5"
+#define MyAppVersion "1.1.7"
 #define MyAppPublisher "M-Pesa"
 #define MyAppExeName "MPesa.exe"
 

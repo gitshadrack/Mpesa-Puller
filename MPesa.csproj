@@ -21,7 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="mpesa.ico" />
+    <None Include="mpesa.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Remove="MPesa.Tests/**/*.cs" />
     <EmbeddedResource Remove="MPesa.Tests/**/*.resx" />
     <None Remove="MPesa.Tests/**/*" />

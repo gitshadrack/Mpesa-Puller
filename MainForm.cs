@@ -193,8 +193,8 @@ sealed class MainForm : Form
         form.Controls.Add(new Label { Text = "Database", AutoSize = true }, 0, 1); form.Controls.Add(databaseBox, 1, 1);
         form.Controls.Add(new Label { Text = "User", AutoSize = true }, 0, 2); form.Controls.Add(userBox, 1, 2);
         form.Controls.Add(new Label { Text = "Password", AutoSize = true }, 0, 3); form.Controls.Add(passwordBox, 1, 3);
-        form.Controls.Add(new Label { Text = "Message Format", AutoSize = true }, 0, 4); form.Controls.Add(profileBox, 1, 4);
-        form.Controls.Add(new Label { Text = "Entity", AutoSize = true }, 0, 5); form.Controls.Add(entityBox, 1, 5);
+        form.Controls.Add(new Label { Text = "Parser Template", AutoSize = true }, 0, 4); form.Controls.Add(profileBox, 1, 4);
+        form.Controls.Add(new Label { Text = "Entity / Template Type", AutoSize = true }, 0, 5); form.Controls.Add(entityBox, 1, 5);
         form.Controls.Add(testDatabaseButton, 1, 6); form.Controls.Add(saveButton, 1, 7); form.Controls.Add(dummyButton, 1, 8); form.Controls.Add(note, 1, 9);
         settingsPanel.Controls.Add(form);
     }
@@ -454,6 +454,13 @@ sealed class MainForm : Form
 
     private static Icon CreateMpesaIcon()
     {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "mpesa.ico");
+        if (File.Exists(iconPath))
+        {
+            using var icon = new Icon(iconPath);
+            return (Icon)icon.Clone();
+        }
+
         using var bitmap = new Bitmap(64, 64);
         using var graphics = Graphics.FromImage(bitmap);
         graphics.Clear(Color.FromArgb(0, 116, 74));
